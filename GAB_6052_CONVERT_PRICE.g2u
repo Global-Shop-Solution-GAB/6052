@@ -1,0 +1,304 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.F_ConvertPart..Create(BaseForm)
+Gui.F_ConvertPart..Caption("Convert Price (6052)")
+Gui.F_ConvertPart..Size(13785,9480)
+Gui.F_ConvertPart..MinX(0)
+Gui.F_ConvertPart..MinY(0)
+Gui.F_ConvertPart..Position(0,0)
+Gui.F_ConvertPart..FontSize(9)
+Gui.F_ConvertPart..BackColor(-2147483633)
+Gui.F_ConvertPart..MousePointer(0)
+Gui.F_ConvertPart..Event(UnLoad,Unload)
+Gui.F_ConvertPart..AlwaysOnTop(False)
+Gui.F_ConvertPart..FontName("Tahoma")
+Gui.F_ConvertPart..ControlBox(True)
+Gui.F_ConvertPart..MaxButton(True)
+Gui.F_ConvertPart..MinButton(True)
+Gui.F_ConvertPart..Moveable(True)
+Gui.F_ConvertPart..Sizeable(True)
+Gui.F_ConvertPart..ShowInTaskBar(True)
+Gui.F_ConvertPart..TitleBar(True)
+Gui.F_ConvertPart.GsGCPart.Create(GsGridControl)
+Gui.F_ConvertPart.GsGCPart.Enabled(True)
+Gui.F_ConvertPart.GsGCPart.Visible(True)
+Gui.F_ConvertPart.GsGCPart.Zorder(0)
+Gui.F_ConvertPart.GsGCPart.Size(13440,8130)
+Gui.F_ConvertPart.GsGCPart.Position(180,735)
+Gui.F_ConvertPart.GsGCPart.Event(RowCellClick,GsGCPart_RowCellClick)
+Gui.F_ConvertPart.GsGCPart.Event(CellValueChanged,GsGCPart_CellValueChanged)
+Gui.F_ConvertPart.cmdUpdate.Create(Button)
+Gui.F_ConvertPart.cmdUpdate.Enabled(True)
+Gui.F_ConvertPart.cmdUpdate.Visible(True)
+Gui.F_ConvertPart.cmdUpdate.Zorder(0)
+Gui.F_ConvertPart.cmdUpdate.Size(1125,345)
+Gui.F_ConvertPart.cmdUpdate.Position(210,225)
+Gui.F_ConvertPart.cmdUpdate.Caption("Update")
+Gui.F_ConvertPart.cmdUpdate.FontName("Tahoma")
+Gui.F_ConvertPart.cmdUpdate.FontSize(8.25)
+Gui.F_ConvertPart.cmdUpdate.Event(Click,cmdUpdate_Click)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.sBaseCurr.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.UnLoad.Start
+	F.ODBC.Connection!conx.Close
+	F.Intrinsic.Control.End
+Program.Sub.UnLoad.End
+
+Program.Sub.Main.Start
+V.Local.sCustomer.Declare
+V.Local.sShipID.Declare
+v.Local.sData.Declare
+v.Local.sSQL.Declare
+v.Local.i1.Declare
+V.Local.sBaseCurr.Declare
+V.Local.fRate.Declare
+V.Local.fBasePrice.Declare
+
+	F.ODBC.Connection!conx.OpenCompanyConnection
+	
+	Gui.F_ConvertPart.GsGCPart.Anchor(15)
+
+	F.Intrinsic.Control.If(V.DataTable.dtPart.Exists,=,True)
+		F.Data.DataTable.Close("dtPart")
+	F.Intrinsic.Control.EndIf
+	
+	F.ODBC.Connection!conx.ExecuteAndReturn("Select Currency From V_Company_Opt",V.Global.sBaseCurr)
+	F.Data.DataTable.CreateFromSQL("dtRate","conx","select * from v_EXCHANGE_RATES Order By DATE_EXCH_RATE DESC",True)
+
+	F.Data.DataTable.CreateFromSQL("dtPart","conx","SELECT Cast(0 As Bit) As Checklist, Rtrim(B.Curr_from) as CurrFrom, A.PART AS Part, A.Locn, C.DESCRIPTION, A.PRICE AS Price FROM V_INV_MULT_LIST A INNER JOIN (SELECT PART, CURR_FROM FROM GAB_6052_CUST_PART GROUP BY PART, CURR_FROM) B ON A.PART = B.PART AND A.CURR = B.CURR_FROM Left Join INVENTORY_MSTR C ON A.PART = C.PART AND A.LOCN = C.LOCATION",True)
+	F.Data.DataTable.AddColumn("dtPart","Rate","Float")
+	F.Data.DataTable.AddColumn("dtPart","DateRate","Date")
+	F.Data.DataTable.AddColumn("dtPart","BasePrice","Float")
+	
+	F.Intrinsic.Control.For(V.Local.i1,0,V.DataTable.dtPart.RowCount--,1)
+		F.Intrinsic.String.Build("SELECT A.EXCHANGE_RATE AS RATE FROM V_EXCHANGE_RATES A INNER JOIN (SELECT Top 1 date_exch_rate AS DATE_RATE FROM V_EXCHANGE_RATES WHERE DATE_EXCH_RATE <= '{0}' ORDER BY DATE_EXCH_RATE DESC) B ON CAST(A.DATE_EXCH_RATE AS DATE) = CAST(B.DATE_RATE AS DATE) WHERE A.TO_ISO_CODE = '{1}' and A.FROM_ISO_CODE = '{2}';",V.Ambient.Date.PervasiveDate,V.Global.sBaseCurr.Trim,V.DataTable.dtPart(V.Local.i1).CurrFrom!FieldValTrim,V.Local.sSQL)
+		F.ODBC.Connection!conx.ExecuteAndReturn(V.Local.sSql,V.Local.fRate)
+		F.Intrinsic.Math.Mult(V.DataTable.dtPart(V.Local.i1).Price!FieldValFloat,V.Local.fRate,V.Local.fBasePrice)
+		F.Data.Datatable.SetValue("dtPart",v.Local.i1,"Rate",V.Local.fRate,"BasePrice",V.Local.fBasePrice)
+	F.Intrinsic.Control.Next(V.local.i1)
+		
+	F.Intrinsic.String.Build("SELECT A.FROM_ISO_CODE AS CURR, A.date_exch_rate as DateRate FROM V_EXCHANGE_RATES A INNER JOIN (SELECT Top 1 date_exch_rate AS DATE_RATE FROM V_EXCHANGE_RATES WHERE DATE_EXCH_RATE <= '{0}' ORDER BY DATE_EXCH_RATE DESC) B ON CAST(A.DATE_EXCH_RATE AS DATE) = CAST(B.DATE_RATE AS DATE) WHERE A.TO_ISO_CODE = '{1}';",V.Ambient.Date.PervasiveDate,V.Global.sBaseCurr.Trim,V.Local.sSQL)
+	F.Data.Dictionary.CreateFromSQL("dicDate","conx",V.Local.sSQL)
+	F.Data.Dictionary.SetDefaultReturn("dicDate","1900-01-01")
+	F.Data.DataTable.FillFromDictionary("dtPart","dicDate","CurrFrom","DateRate")
+	F.Data.Dictionary.Close("dicDate")
+
+	Gui.F_ConvertPart.GsGCPart.AddGridviewFromDataTable("gvPart","dtPart")
+	Gui.F_ConvertPart.GsGCPart.SetGridViewProperty("gvPart","MultiSelect",True)
+	Gui.F_ConvertPart.GsGCPart.SetGridViewProperty("gvPart","OptionBehaviorEditable",True)
+	Gui.F_ConvertPart.GsGCPart.SetGridViewProperty("gvPart","AllowSort",True)
+	Gui.F_ConvertPart.GsGCPart.SetGridViewProperty("gvPart","AllowFilter",True)
+	Gui.F_ConvertPart.GsGCPart.SetGridViewProperty("gvPart","OptionsDetailShowDetailTabs",False)
+	Gui.F_ConvertPart.GsGCPart.SetGridViewProperty("gvPart","OptionsFindAlwaysVisible",True)
+	
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Checklist","ShowCaption",False)
+	
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","CurrFrom","Caption","Curency")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","BasePrice","Caption","Base Price")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","DateRate","Caption","Date Rate")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Description","Caption","Description")
+	
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Checklist","AllowEdit",False)
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Part","AllowEdit",True)
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Price","AllowEdit",True)
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","DateRate","AllowEdit",False)
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Rate","AllowEdit",True)
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","BasePrice","AllowEdit",False)
+
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Rate","ReadOnly",False)
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","DateRate","ReadOnly",True)
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","BasePrice","ReadOnly",False)
+	
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Checklist","MinWidth","25")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Part","MinWidth","100")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Price","MinWidth","100")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Description","MinWidth","200")
+	
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Part","HeaderHAlignment","Center")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Price","HeaderHAlignment","Center")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Description","HeaderHAlignment","Center")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","DateRate","HeaderHAlignment","Center")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","BasePrice","HeaderHAlignment","Center")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Rate","HeaderHAlignment","Center")
+	
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","DateRate","DisplayCustomDatetime","d")
+	
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Rate","DisplayCustomNumeric","#,###,##0.00000")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","Price","DisplayCustomNumeric","#,###,##0.000000")
+	Gui.F_ConvertPart.GsGCPart.SetColumnProperty("gvPart","BasePrice","DisplayCustomNumeric","#,###,##0.000000")
+	
+	Gui.F_ConvertPart.GsGCPart.MainView("gvPart")
+	Gui.F_ConvertPart..Show
+Program.Sub.Main.End
+
+Program.Sub.GsGCPart_RowCellClick.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+
+	V.Local.iRet.Declare
+	V.Local.sType.Declare
+	V.Local.sAPPROVE.Declare
+	V.Local.fZERO.Declare
+	V.Local.dDate.Declare
+
+	F.Intrinsic.Control.SelectCase(V.Args.column)
+		F.Intrinsic.Control.Case("Checklist")
+			F.Intrinsic.Control.If(V.DataTable.dtPart(V.Args.RowIndex).Checklist!FieldVal,=,False)
+				F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"Checklist",TRUE)
+			F.Intrinsic.Control.ElseIf(V.DataTable.dtPart(V.Args.RowIndex).Checklist!FieldVal,=,TRUE)
+				F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"Checklist",FALSE)		
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.Case("DateRate")
+			V.Local.dDate.Set(V.DataTable.dtPart(V.Args.RowIndex).DateRate!FieldValPervasiveDate)
+'			F.Intrinsic.Debug.ShowCallerInfo
+			F.Intrinsic.Control.CallSub(DateVerification,"RowIndex",V.Args.RowIndex,"Value",V.Local.dDate.PervasiveDate)
+	F.Intrinsic.Control.EndSelect
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: GAB_6052_CONVERT_PRICE.g2u{0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}.",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.GsGCPart_RowCellClick.End
+
+Program.Sub.GsGCPart_CellValueChanged.Start
+V.Local.bNumeric.Declare
+V.Local.sPart.Declare
+V.Local.sLoc.Declare
+V.Local.dDate.Declare
+V.Local.sRet.Declare
+
+'Reference is keyed in
+F.Intrinsic.Control.If(V.Args.Column,=,"DateRate")
+	V.Local.dDate.Set(V.Args.Value)
+	F.Intrinsic.Control.CallSub(DateVerification,"RowIndex",V.Args.RowIndex,"Value",V.Local.dDate.PervasiveDate)
+F.Intrinsic.Control.ElseIf(V.Args.Column,=,"Rate")
+	F.Intrinsic.Control.CallSub(RateVerification,"RowIndex",V.Args.RowIndex,"Value",V.Args.Value)
+F.Intrinsic.Control.EndIf
+Program.Sub.GsGCPart_CellValueChanged.End
+
+Program.Sub.DateVerification.Start
+V.Local.fAdjustment.Declare
+V.Local.fAmtBase.Declare
+V.Local.fDiff.Declare
+V.Local.fExchRate.Declare
+V.Local.fGridAmt.Declare
+V.Local.iLine.Declare
+V.Local.iWidths.Declare
+V.Local.sCurrency.Declare
+V.Local.sFilter.Declare
+V.Local.sFilterResult.Declare
+V.Local.sRet.Declare
+V.Local.sSQL.Declare
+V.Local.sTitles.Declare
+V.Local.fPrice.Declare
+V.Local.fBasePrice.Declare
+V.Local.sCurrFrom.Declare
+
+'Verify the Date Rate in the grid
+'Gui.F_ConvertPart.GsGCPart.GetCellValueByColumnName("gvPart","CurrFrom",V.Args.RowIndex,V.Local.sCurrFrom)
+'F.Intrinsic.String.Build("DATE_EXCH_RATE='{0}' AND From_ISO_Code = '{0}' and To_ISO_Code = '{2}'",V.Args.Value,V.Local.sCurrFrom,V.Global.sBaseCurr.Trim,V.Local.sFilter)
+'F.Data.DataTable.Select("dtRate",V.Local.sFilter,V.Local.sFilterResult)
+'F.Intrinsic.Control.If(V.Local.sFilterResult,=,"***NORETURN***")
+'	F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"DateRate","1900-01-01","Rate",0,"BasePrice",0)
+	
+	'Open Exchange Rates browser
+	F.Intrinsic.String.Split("Date*!*Curr From*!*Curr To*!*Rate","*!*",V.Local.sTitles)
+	F.Intrinsic.String.Split("1200*!*500*!*500*!*1500","*!*",V.Local.iWidths)
+	F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+	Gui.F_ConvertPart.GsGCPart.GetCellValueByColumnName("gvPart","CurrFrom",V.Args.RowIndex,V.Local.sCurrFrom)
+	F.Intrinsic.String.Build("select * from v_EXCHANGE_RATES Where From_ISO_Code = '{0}' and To_ISO_Code = '{1}' order by DATE_EXCH_RATE DESC;",V.Local.sCurrFrom,V.Global.sBaseCurr.Trim,V.Local.sSQL)
+	F.Intrinsic.UI.Browser("Select a Rate","conx",V.Local.sSQl.Trim,V.Local.sTitles,V.Local.iWidths,12500,10000,V.Local.sRet)
+	
+	F.Intrinsic.Control.If(V.Local.sRet,<>,"***CANCEL***")
+		F.Intrinsic.String.Split(V.Local.sRet,"*!*",V.Local.sRet)
+		Gui.F_ConvertPart.GsGCPart.GetCellValueByColumnName("gvPart","Price",V.Args.RowIndex,V.Local.fPrice)
+		F.Intrinsic.Math.Mult(V.Local.fPrice,V.Local.sRet(3).Float,V.Local.fBasePrice)
+		F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"DateRate",V.Local.sRet(0).Trim,"Rate",V.Local.sRet(3).Float,"BasePrice",V.Local.fBasePrice)
+	F.Intrinsic.Control.EndIf
+'F.Intrinsic.Control.Else
+'	F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"DateRate",V.DataTable.dtRate(V.Local.sFilterResult).Date_Exch_Rate!FieldValPervasiveDate,"Rate",V.DataTable.dtRate(V.Local.sFilterResult).Exchange_Rate!FieldValFloat)
+'F.Intrinsic.Control.EndIf
+Program.Sub.DateVerification.End
+
+Program.Sub.RateVerification.Start
+V.Local.fAdjustment.Declare
+V.Local.fAmtBase.Declare
+V.Local.fDiff.Declare
+V.Local.fExchRate.Declare
+V.Local.fGridAmt.Declare
+V.Local.iLine.Declare
+V.Local.iWidths.Declare
+V.Local.sCurrency.Declare
+V.Local.sFilter.Declare
+V.Local.sFilterResult.Declare
+V.Local.sRet.Declare
+V.Local.sSQL.Declare
+V.Local.sTitles.Declare
+V.Local.fPrice.Declare
+V.Local.fBasePrice.Declare
+V.Local.sCurrFrom.Declare
+
+'Verify the Date Rate in the grid
+Gui.F_ConvertPart.GsGCPart.GetCellValueByColumnName("gvPart","CurrFrom",V.Args.RowIndex,V.Local.sCurrFrom)
+F.Intrinsic.String.Build("EXCHANGE_RATE={0} AND From_ISO_Code = '{0}' and To_ISO_Code = '{1}'",V.Args.Value,V.Local.sCurrFrom,V.Global.sBaseCurr.Trim,V.Local.sFilter)
+F.Data.DataTable.Select("dtRate",V.Local.sFilter,V.Local.sFilterResult)
+F.Intrinsic.String.Split(V.Local.sFilterResult,"*!*",V.Local.sFilterResult)
+'f.Intrinsic.Debug.ShowCallerInfo
+F.Intrinsic.Control.If(V.Local.sFilterResult(0),=,"***NORETURN***")
+	F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"DateRate","1900-01-01","Rate",0,"BasePrice",0)
+	
+	'Open Exchange Rates browser
+	F.Intrinsic.String.Split("Date*!*Curr From*!*Curr To*!*Rate","*!*",V.Local.sTitles)
+	F.Intrinsic.String.Split("1200*!*500*!*500*!*1500","*!*",V.Local.iWidths)
+	F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+	F.Intrinsic.String.Build("select * from v_EXCHANGE_RATES Where From_ISO_Code = '{0}' and To_ISO_Code = '{1}' order by DATE_EXCH_RATE DESC;",V.Local.sCurrFrom,V.Global.sBaseCurr.Trim,V.Local.sSQL)
+	F.Intrinsic.UI.Browser("Select a Rate","conx",V.Local.sSQl.Trim,V.Local.sTitles,V.Local.iWidths,12500,10000,V.Local.sRet)
+	
+	F.Intrinsic.Control.If(V.Local.sRet,<>,"***CANCEL***")
+		F.Intrinsic.String.Split(V.Local.sRet,"*!*",V.Local.sRet)
+		Gui.F_ConvertPart.GsGCPart.GetCellValueByColumnName("gvPart","Price",V.Args.RowIndex,V.Local.fPrice)
+		F.Intrinsic.Math.Mult(V.Local.fPrice,V.Local.sRet(3).Float,V.Local.fBasePrice)
+		F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"DateRate",V.Local.sRet(0).Trim,"Rate",V.Local.sRet(3).Float,"BasePrice",V.Local.fBasePrice)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Else
+	F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"DateRate",V.DataTable.dtRate(V.Local.sFilterResult).Date_Exch_Rate!FieldValPervasiveDate,"Rate",V.DataTable.dtRate(V.Local.sFilterResult).Exchange_Rate!FieldValFloat)
+F.Intrinsic.Control.EndIf
+Program.Sub.RateVerification.End
+
+Program.Sub.cmdUpdate_Click.Start
+F.Intrinsic.Control.BlockEvents
+V.Local.iID.Declare
+V.Local.sID.Declare
+V.Local.sSql.Declare
+V.Local.i1.Declare
+V.Local.i2.Declare
+V.Local.sCustomer.Declare
+V.Local.sShipID.Declare
+V.Local.iFlag.Declare
+V.Local.sTime.Declare
+
+F.Intrinsic.String.Format(V.Ambient.Time,"Hh:Nn:Ss",V.Local.sTime)
+	F.Intrinsic.Control.For(V.Local.i1,0,V.DataTable.dtPart.RowCount--,1)
+		F.Intrinsic.Control.If(V.DataTable.dtPart(V.Local.i1).Checklist!FieldVal,=,True)	
+			F.Intrinsic.String.Build("insert into GAB_6052_CONVERT_LOG (PART, LOCATION, CURR, PRICE, PRICE_BASE, EXCH_RATE, EXCH_DATE, CHANGE_DATE, CHANGE_TIME, CHANGE_BY) values('{0}','{1}','{2}',{3},{4},'{5}','{6}','{7}','{8}','{9}');",V.DataTable.dtPart(V.Local.i1).Part!FieldValTrim, V.DataTable.dtPart(V.Local.i1).LOCN!FieldValTrim, V.DataTable.dtPart(V.Local.i1).CurrFrom!FieldValTrim, V.DataTable.dtPart(V.Local.i1).Price!FieldValFloat, V.DataTable.dtPart(V.Local.i1).BasePrice!FieldValfloat, V.DataTable.dtPart(V.Local.i1).Rate!FieldValFloat, V.DataTable.dtPart(V.Local.i1).DateRate!FieldValPervasiveDate, V.Ambient.Date.PervasiveDate, V.Local.sTime, v.Caller.User, v.Local.sSQL)
+			F.ODBC.Connection!conx.Execute(v.Local.sSQL)
+				
+			F.Intrinsic.String.Build("Update Inventory_MSTR Set AMT_Price = '{0}' WHERE PART = '{1}' AND LOCATION = '{2}';",V.DataTable.dtPart(V.Local.i1).BasePrice!FieldValfloat,V.DataTable.dtPart(V.Local.i1).Part!FieldValTrim, V.DataTable.dtPart(V.Local.i1).locn!FieldValTrim, v.Local.sSQL)
+			F.ODBC.Connection!conx.Execute(v.Local.sSQL)
+		F.Intrinsic.Control.EndIf	
+	F.Intrinsic.Control.Next(V.Local.i1)
+F.Intrinsic.Control.UnBlockEvents
+
+F.Intrinsic.UI.Msgbox("Done!","Convert Price (6025)")
+
+'F.Intrinsic.Control.CallSub(Unload)
+Program.Sub.cmdUpdate_Click.End
+
+Program.Sub.Comments.Start
+${$5$}$3.0.0.0$}$1
+${$6$}$dyunus$}$20200831090415214$}$xZ6SHi8g7O0Qsxe6AiO2NH3PnOKQRy0Tn1uINJxucJdSZu7Uv+6WSxBft40930KzwiuySsKJz0M=
+Program.Sub.Comments.End
