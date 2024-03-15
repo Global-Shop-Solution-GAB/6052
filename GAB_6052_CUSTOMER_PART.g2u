@@ -1,0 +1,331 @@
+﻿Program.Sub.ScreenSU.Start
+Gui.F_CustPart..Create(BaseForm)
+Gui.F_CustPart..Caption("Customer Part (6052)")
+Gui.F_CustPart..Size(10200,9480)
+Gui.F_CustPart..MinX(0)
+Gui.F_CustPart..MinY(0)
+Gui.F_CustPart..Position(0,0)
+Gui.F_CustPart..FontSize(9)
+Gui.F_CustPart..BackColor(-2147483633)
+Gui.F_CustPart..MousePointer(0)
+Gui.F_CustPart..Event(UnLoad,Unload)
+Gui.F_CustPart..AlwaysOnTop(False)
+Gui.F_CustPart..FontName("Tahoma")
+Gui.F_CustPart..ControlBox(True)
+Gui.F_CustPart..MaxButton(True)
+Gui.F_CustPart..MinButton(True)
+Gui.F_CustPart..Moveable(True)
+Gui.F_CustPart..Sizeable(True)
+Gui.F_CustPart..ShowInTaskBar(True)
+Gui.F_CustPart..TitleBar(True)
+Gui.F_CustPart.GsGCPart.Create(GsGridControl)
+Gui.F_CustPart.GsGCPart.Enabled(True)
+Gui.F_CustPart.GsGCPart.Visible(True)
+Gui.F_CustPart.GsGCPart.Zorder(0)
+Gui.F_CustPart.GsGCPart.Size(9840,8130)
+Gui.F_CustPart.GsGCPart.Position(180,735)
+Gui.F_CustPart.GsGCPart.Event(RowCellClick,GsGCPart_RowCellClick)
+Gui.F_CustPart.GsGCPart.Event(CellValueChanged,GsGCPart_CellValueChanged)
+Gui.F_CustPart.cmdSave.Create(Button)
+Gui.F_CustPart.cmdSave.Enabled(True)
+Gui.F_CustPart.cmdSave.Visible(True)
+Gui.F_CustPart.cmdSave.Zorder(0)
+Gui.F_CustPart.cmdSave.Size(1125,345)
+Gui.F_CustPart.cmdSave.Position(210,225)
+Gui.F_CustPart.cmdSave.Caption("SAVE")
+Gui.F_CustPart.cmdSave.FontName("Tahoma")
+Gui.F_CustPart.cmdSave.FontSize(8.25)
+Gui.F_CustPart.cmdSave.Event(Click,cmdSave_Click)
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+V.Global.sCustomer.Declare
+V.Global.sCurrTo.Declare
+Program.Sub.Preflight.End
+
+Program.Sub.UnLoad.Start
+	F.ODBC.Connection!conx.Close
+	F.Intrinsic.Control.End
+Program.Sub.UnLoad.End
+
+Program.Sub.Main.Start
+V.Local.sCustomer.Declare
+V.Local.sShipID.Declare
+v.Local.sData.Declare
+v.Local.sSQL.Declare
+v.Local.i1.Declare
+V.Local.sCurrTo.Declare
+V.Local.bExist.Declare
+
+F.ODBC.Connection!conx.OpenCompanyConnection
+
+F.Intrinsic.Control.If(V.Caller.Hook,=,14350)
+	V.Passed.000202.Set("Flag Part")
+	
+	F.ODBC.Connection!conX.TableExists("GAB_6052_CUST_PART",V.Local.bExist)
+	F.Intrinsic.Control.If(V.Local.bExist,=,False)
+		F.ODBC.Connection!conX.Execute("CREATE TABLE GAB_6052_CUST_PART(CUSTOMER CHAR(6),PART CHAR(20),LOCATION CHAR(2),CURR_FROM CHAR(3),CURR_TO CHAR(3) );")
+	F.Intrinsic.Control.EndIf
+	
+	F.ODBC.Connection!conX.TableExists("GAB_6052_CONVERT_LOG",V.Local.bExist)
+	F.Intrinsic.Control.If(V.Local.bExist,=,False)
+		F.ODBC.Connection!conX.Execute("CREATE TABLE GAB_6052_CONVERT_LOG (PART CHAR(20),LOCATION CHAR(2),CURR CHAR(3),PRICE NUMERIC(15,6),PRICE_BASE NUMERIC(15,6),EXCH_RATE NUMERIC(10,5),EXCH_DATE DATE,CHANGE_DATE DATE,CHANGE_TIME TIME,CHANGE_BY CHAR(8) );")
+	F.Intrinsic.Control.EndIf
+	
+F.Intrinsic.Control.ElseIf(V.Caller.Hook,=,14370)
+	V.Global.sCustomer.Set(V.Passed.000002)
+	V.Global.sCurrTo.Set(V.Passed.000067)
+
+	F.Intrinsic.Control.If(V.DataTable.dtAdj.Exists,=,True)
+		F.Data.DataTable.Close("dtAdj")
+	F.Intrinsic.Control.EndIf
+	
+	'Datatable for Inventory Master
+	F.Data.DataTable.CreateFromSQL("dtInvPart","conx","select Part, Location, Description from v_Inventory_Mstr",True)
+	'Datatable for Inventory Multi Price Master
+	F.Data.DataTable.CreateFromSQL("dtCurrPart","conx","select Part, Locn, Curr from V_Inv_Mult_List",True)
+
+	F.Intrinsic.String.Build("select Customer from GAB_6052_CUST_PART where CUSTOMER = '{0}'",V.Global.sCustomer.Trim,V.Local.sSQL)
+	F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+	F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,True)
+
+		'Prepare entry grid
+		F.Data.DataTable.Create("dtPart",True)
+		F.Data.DataTable.AddColumn("dtPart","PART","String")
+		F.Data.DataTable.AddColumn("dtPart","LOCATION","String")
+		F.Data.DataTable.AddColumn("dtPart","DESCRIPTION","String")
+		F.Data.DataTable.AddColumn("dtPart","CURRFROM","String")
+		F.Data.DataTable.AddColumn("dtPart","CURRTO","String")
+		F.Data.DataTable.AddColumn("dtPart","DELETE","Long")
+		F.Data.DataTable.AddRow("dtPart","Part","","CurrFrom","","CurrTo",V.Global.sCurrTo.Trim)
+
+	F.Intrinsic.Control.Else
+
+		F.Intrinsic.String.Build("SELECT A.PART, A.LOCATION, DESCRIPTION, CURR_FROM as CurrFrom, CURR_TO as CurrTo FROM GAB_6052_CUST_PART A left join v_inventory_mstr B on A.Part = B.Part WHERE CUSTOMER = '{0}'",V.Global.sCustomer,v.Local.sSQL)
+		F.Data.DataTable.CreateFromSQL("dtPart","conx",v.Local.sSQL,True)
+		F.Data.DataTable.AddColumn("dtPart","DELETE","String")
+		F.Data.DataTable.AddRow("dtPart","PART","","CurrFrom","","CurrTo",V.Global.sCurrTo.Trim)
+
+	F.Intrinsic.Control.EndIf
+	F.ODBC.conx!rst.Close
+
+	Gui.F_CustPart.GsGCPart.AddGridviewFromDataTable("gvPart","dtPart")
+	Gui.F_CustPart.GsGCPart.SetGridViewProperty("gvPart","MultiSelect",True)
+	Gui.F_CustPart.GsGCPart.SetGridViewProperty("gvPart","OptionBehaviorEditable",True)
+	Gui.F_CustPart.GsGCPart.SetGridViewProperty("gvPart","AllowSort",True)
+	Gui.F_CustPart.GsGCPart.SetGridViewProperty("gvPart","AllowFilter",True)
+	Gui.F_CustPart.GsGCPart.SetGridViewProperty("gvPart","OptionsDetailShowDetailTabs",False)
+	Gui.F_CustPart.GsGCPart.SetGridViewProperty("gvPart","OptionsFindAlwaysVisible",True)
+	
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Delete","ShowCaption",False)
+	Gui.F_CustPart.GsGCPart.ColumnEdit("gvPart","Delete","EditorButton","Delete")
+	
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrFrom","Caption","Currency From")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrTo","Caption","Currency To")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","PART","Caption","Part")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","DESCRIPTION","Caption","Description")
+
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Delete","AllowEdit",False)
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrFrom","AllowEdit",True)
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrTo","AllowEdit",True)
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Part","AllowEdit",True)
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Location","AllowEdit",False)
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Description","AllowEdit",False)
+	
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrFrom","ReadOnly",False)
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrTo","ReadOnly",True)
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Part","ReadOnly",False)
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Location","ReadOnly",True)
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Description","ReadOnly",True)
+	
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Delete","MinWidth","25")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrFrom","MinWidth","100")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrTo","MinWidth","100")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Part","MinWidth","100")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Location","MinWidth","50")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Description","MinWidth","100")
+	
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrFrom","HeaderHAlignment","Center")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrTo","HeaderHAlignment","Center")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Part","HeaderHAlignment","Center")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Location","HeaderHAlignment","Center")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","Description","HeaderHAlignment","Center")
+
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrFrom","CellHAlignment","Center")
+	Gui.F_CustPart.GsGCPart.SetColumnProperty("gvPart","CurrTo","CellHAlignment","Center")
+	
+	Gui.F_CustPart.GsGCPart.MainView("gvPart")
+	Gui.F_CustPart..Show
+F.Intrinsic.Control.EndIf
+Program.Sub.Main.End
+
+Program.Sub.GsGCPart_CellValueChanged.Start
+V.Local.bNumeric.Declare
+V.Local.sPart.Declare
+V.Local.sLoc.Declare
+
+F.Intrinsic.Control.If(V.Args.Column,=,"PART")
+	Gui.F_CustPart.GsGCPart.GetCellValueByColumnName("gvPart","LOCATION",V.Args.RowIndex,V.Local.sLoc)
+	F.Intrinsic.Control.CallSub(PartVerification,"RowIndex",V.Args.RowIndex,"Value",V.Args.Value,"Location",V.Local.sLoc.Trim)
+F.Intrinsic.Control.ElseIf(V.Args.Column,=,"CURRFROM")
+	'Reference is keyed in
+	Gui.F_CustPart.GsGCPart.GetCellValueByColumnName("gvPart","PART",V.Args.RowIndex,V.Local.sPart)
+	Gui.F_CustPart.GsGCPart.GetCellValueByColumnName("gvPart","LOCATION",V.Args.RowIndex,V.Local.sLoc)	
+	F.Intrinsic.Control.CallSub(CurrFromVerification,"RowIndex",V.Args.RowIndex,"Value",V.Local.sPart,"Location",V.Local.sLoc.Trim)
+F.Intrinsic.Control.EndIf
+Program.Sub.GsGCPart_CellValueChanged.End
+
+Program.Sub.PartVerification.Start
+V.Local.fAdjustment.Declare
+V.Local.fAmtBase.Declare
+V.Local.fDiff.Declare
+V.Local.fExchRate.Declare
+V.Local.fGridAmt.Declare
+V.Local.iLine.Declare
+V.Local.iWidths.Declare
+V.Local.sCurrency.Declare
+V.Local.sFilter.Declare
+V.Local.sFilterResult.Declare
+V.Local.sRet.Declare
+V.Local.sSQL.Declare
+V.Local.sTitles.Declare
+
+'Verify the GL account entered in the grid
+F.Intrinsic.String.Build("Part='{0}' and Location='{1}'",V.Args.Value,V.Args.Location,V.Local.sFilter)
+F.Data.DataTable.Select("dtInvPart",V.Local.sFilter,V.Local.sFilterResult)
+F.Intrinsic.Control.If(V.Local.sFilterResult,=,"***NORETURN***")
+	F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"PART","")
+	
+	'Open chart of accounts browser
+	F.Intrinsic.String.Split("Part*!*Location*!*Description","*!*",V.Local.sTitles)
+	F.Intrinsic.String.Split("1200*!*500*!*2500","*!*",V.Local.iWidths)
+	F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+	F.Intrinsic.UI.Browser("Select a Part number","conx","select Part, Location, Description from v_inventory_mstr order by Part",V.Local.sTitles,V.Local.iWidths,12500,10000,V.Local.sRet)
+	
+	F.Intrinsic.Control.If(V.Local.sRet,<>,"***CANCEL***")
+		F.Intrinsic.String.Split(V.Local.sRet,"*!*",V.Local.sRet)
+		F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"Part",V.Local.sRet(0).Trim,"Location",V.Local.sRet(1).Trim,"Description",V.Local.sRet(2).Trim)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Else
+	F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"Location",V.DataTable.dtInvPart(V.Local.sFilterResult).Location!FieldValTrim,"Description",V.DataTable.dtInvPart(V.Local.sFilterResult).Description!FieldValTrim)
+F.Intrinsic.Control.EndIf
+Program.Sub.PartVerification.End
+
+Program.Sub.CurrFromVerification.Start
+V.Local.fAdjustment.Declare
+V.Local.fAmtBase.Declare
+V.Local.fDiff.Declare
+V.Local.fExchRate.Declare
+V.Local.fGridAmt.Declare
+V.Local.iLine.Declare
+V.Local.iWidths.Declare
+V.Local.sCurrency.Declare
+V.Local.sFilter.Declare
+V.Local.sFilterResult.Declare
+V.Local.sRet.Declare
+V.Local.sSQL.Declare
+V.Local.sTitles.Declare
+
+F.Intrinsic.Control.BlockEvents
+
+'Verify the GL account entered in the grid
+F.Intrinsic.String.Build("Part='{0}' and Locn='{1}'",V.Args.Value,V.Args.Location,V.Local.sFilter)
+F.Data.DataTable.Select("dtCurrPart",V.Local.sFilter,V.Local.sFilterResult)
+F.Intrinsic.Control.If(V.Local.sFilterResult,=,"***NORETURN***")
+	F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"PART","","LOCATION","","DESCRIPTION","","CURRFROM","")
+	
+	'Open chart of accounts browser
+	F.Intrinsic.String.Split("Part*!*Currency","*!*",V.Local.sTitles)
+	F.Intrinsic.String.Split("1200*!*2500","*!*",V.Local.iWidths)
+	F.Intrinsic.UI.SetBrowserHotTypeAhead(True)
+	F.Intrinsic.String.Build("select Part, Curr from V_Inv_Mult_List where Part = '{0}' and locn = '{1}' Order By Curr",V.Args.Value.Trim,V.Args.Location.Trim,V.Local.sFilter)	
+	F.Intrinsic.UI.Browser("Select a Part number","conx",V.Local.sFilter,V.Local.sTitles,V.Local.iWidths,12500,10000,V.Local.sRet)
+	
+	F.Intrinsic.Control.If(V.Local.sRet,<>,"***CANCEL***")
+		F.Intrinsic.String.Split(V.Local.sRet,"*!*",V.Local.sRet)
+		F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"CURRFROM",V.Local.sRet(1).Trim)
+		F.Data.DataTable.AddRow("dtPart","CURRTO",V.Global.sCurrTo.Trim)
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Else
+	F.Data.DataTable.SetValue("dtPart",V.Args.RowIndex,"CURRFROM",V.DataTable.dtCurrPart(V.Local.sFilterResult).Curr!FieldValTrim)
+	F.Data.DataTable.AddRow("dtPart","CURRTO",V.Global.sCurrTo.Trim)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.UnBlockEvents
+Program.Sub.CurrFromVerification.End
+
+Program.Sub.GsGCPart_RowCellClick.Start
+	F.Intrinsic.Control.Try
+	V.Local.sError.Declare
+
+	V.Local.iRet.Declare
+	V.Local.sType.Declare
+	V.Local.sAPPROVE.Declare
+	V.Local.fZERO.Declare
+	V.Local.sSQL.Declare
+
+		F.Intrinsic.Control.SelectCase(V.Args.column)
+			F.Intrinsic.Control.Case("DELETE")
+				F.Intrinsic.Control.If(V.DataTable.dtPart(V.Args.RowIndex).Part!FieldValTrim,<>,"")
+				F.Intrinsic.String.Build("SELECT * FROM GAB_6052_CUST_PART WHERE CUSTOMER = '{0}' and PART = '{1}' and Location = '{2}'",V.Global.sCustomer.Trim,V.DataTable.dtPart(V.Args.RowIndex).Part!FieldValTrim,V.DataTable.dtPart(V.Args.RowIndex).Location!FieldValTrim,v.Local.sSQL)
+				F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+				
+					F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,False)		
+						F.Intrinsic.String.Build("Delete GAB_6052_CUST_Part Where Customer = '{0}' and Part = '{1}' and Location = '{2}';",V.Global.sCustomer.Trim, V.DataTable.dtPart(V.Args.RowIndex).Part!FieldValTrim, V.DataTable.dtPart(V.Args.RowIndex).Location!FieldValTrim, V.DataTable.dtPart(V.Args.RowIndex).CurrFrom!FieldValTrim, V.DataTable.dtPart(V.Args.RowIndex).CurrTo!FieldValTrim, v.Local.sSQL)	
+						F.ODBC.Connection!conx.Execute(v.Local.sSQL)
+					F.Intrinsic.Control.EndIf
+					
+				F.ODBC.conx!rst.Close					
+				F.Data.DataTable.DeleteRow("dtPart",V.Args.RowIndex)
+				F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndSelect
+	
+	F.Intrinsic.Control.Catch
+		F.Intrinsic.String.Build("Project: GAB_6004_Copy_Ship_to_ID.g2u{0}{0}Subroutine: {1}{0}Error Occurred {2} with description {3}.",V.Ambient.Newline,V.Ambient.CurrentSubroutine,V.Ambient.ErrorNumber,V.Ambient.ErrorDescription,V.Local.sError)
+		F.Intrinsic.UI.Msgbox(V.Local.sError)
+		F.Intrinsic.Control.End 
+	F.Intrinsic.Control.EndTry
+Program.Sub.GsGCPart_RowCellClick.End
+
+Program.Sub.cmdSave_Click.Start
+F.Intrinsic.Control.BlockEvents
+V.Local.iID.Declare
+V.Local.sID.Declare
+V.Local.sSql.Declare
+V.Local.i1.Declare
+V.Local.i2.Declare
+V.Local.sCustomer.Declare
+V.Local.sShipID.Declare
+V.Local.iFlag.Declare
+
+F.Intrinsic.Control.If(V.DataTable.dtPart.RowCount,>,0)
+	F.Intrinsic.Control.For(V.Local.i1,0,V.DataTable.dtPart.RowCount--,1)
+		F.Intrinsic.Control.If(V.DataTable.dtPart(V.Local.i1).Part!FieldValTrim,<>,"")
+			F.Intrinsic.String.Build("SELECT * FROM GAB_6052_CUST_PART WHERE CUSTOMER = '{0}' and PART = '{1}' and Location = '{2}'",V.Global.sCustomer.Trim,V.DataTable.dtPart(V.Local.i1).Part!FieldValTrim,V.DataTable.dtPart(V.Local.i1).Location!FieldValTrim,v.Local.sSQL)
+			F.ODBC.Connection!conx.OpenLocalRecordsetRO("rst",V.Local.sSQL)
+				
+			F.Intrinsic.Control.If(V.ODBC.conx!rst.EOF,=,True)
+				
+				F.Intrinsic.String.Build("insert into GAB_6052_CUST_Part(CUSTOMER,PART,LOCATION,CURR_FROM,CURR_TO) values('{0}','{1}','{2}','{3}','{4}');",V.Global.sCustomer.Trim, V.DataTable.dtPart(V.Local.i1).Part!FieldValTrim, V.DataTable.dtPart(V.Local.i1).Location!FieldValTrim, V.DataTable.dtPart(V.Local.i1).CurrFrom!FieldValTrim, V.DataTable.dtPart(V.Local.i1).CurrTo!FieldValTrim, v.Local.sSQL)	
+				F.ODBC.Connection!conx.Execute(v.Local.sSQL)
+				
+			F.Intrinsic.Control.Else
+				
+				F.Intrinsic.String.Build("Update GAB_6052_CUST_Part Set CURR_FROM = '{3}' Where Customer = '{0}' and Part = '{1}' and Location = '{2}';",V.Global.sCustomer.Trim, V.DataTable.dtPart(V.Local.i1).Part!FieldValTrim, V.DataTable.dtPart(V.Local.i1).Location!FieldValTrim, V.DataTable.dtPart(V.Local.i1).CurrFrom!FieldValTrim, V.DataTable.dtPart(V.Local.i1).CurrTo!FieldValTrim, v.Local.sSQL)	
+				F.ODBC.Connection!conx.Execute(v.Local.sSQL)
+				
+			F.Intrinsic.Control.EndIf
+			F.ODBC.conx!rst.Close
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.i1)
+F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.UnBlockEvents
+
+F.Intrinsic.UI.Msgbox("Done!","Convert Part Price (6052)")
+
+F.Intrinsic.Control.CallSub(Unload)
+Program.Sub.cmdSave_Click.End
+
+Program.Sub.Comments.Start
+${$5$}$3.0.0.0$}$1
+${$6$}$dyunus$}$20200729144943567$}$xZ6SHi8g7O0Qsxe6AiO2NH3PnOKQRy0Tf/tkEvwYUaRzd0kIfH75qApg1wWrpPyoAib7lIArYvw=
+Program.Sub.Comments.End
